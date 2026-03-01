@@ -1,5 +1,5 @@
 # Insider-Threat-Detection-Lab
-# Lab 1 – Insider Threat Detection
+# Lab – Insider Threat Detection
 
 ## Goal
 Identify anomalous user activity and risk escalation indicators and classify for further investigation.
