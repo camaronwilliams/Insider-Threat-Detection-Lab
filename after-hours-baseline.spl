@@ -1,0 +1,30 @@
+# after-hours-baseline.spl
+# Purpose: Baseline check — quantify after-hours login frequency by user.
+# Output: Total logins, after-hours logins, and after-hours percentage per user.
+
+| makeresults count=220
+| streamstats count as n
+| eval base=relative_time(now(),"@d")
+
+# --- Simulate users/timestamps ---
+| eval user=case(n<=140,"alice", n<=175,"bob", true(),"jdoe")
+| eval _time=case(user="jdoe", base + 23*3600 + (n%1800), true(), base + 10*3600 + (n%1800))
+
+# --- Simulate logon events (mostly 4624) ---
+| eval EventCode=case(user="jdoe" AND n>=180 AND n<=205,4625,
+                      user="jdoe" AND n=206,4624,
+                      user="jdoe" AND n>=207 AND n<=210,4672,
+                      user="bob" AND n%15=0,4625,
+                      true(),4624)
+
+# --- Only successful logons for baseline ---
+| where EventCode=4624
+
+# --- After-hours definition ---
+| eval hour=tonumber(strftime(_time,"%H"))
+| eval after_hours=if(hour>=22 OR hour<=5,1,0)
+
+# --- Baseline output ---
+| stats count as total_logins sum(after_hours) as after_hours_logins by user
+| eval after_hours_pct=round((after_hours_logins/total_logins)*100,1)
+| sort -after_hours_pct
