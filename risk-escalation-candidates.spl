@@ -1,0 +1,71 @@
+# risk-escalation-candidates.spl
+# Purpose: Identify insider-style risk escalation using multiple indicators and a simple risk score.
+# Data: Simulated Windows-style events (4624 success, 4625 fail, 4672 privileged)
+# Output: Candidate table with risk score + recommended action.
+
+| makeresults count=220
+| streamstats count as n
+| eval base=relative_time(now(),"@d")
+
+# --- Simulate users and timestamps (jdoe is the "high-risk" chain) ---
+| eval user=case(n<=140,"alice", n<=175,"bob", true(),"jdoe")
+| eval _time=case(user="jdoe", base + 23*3600 + (n%1800), true(), base + 10*3600 + (n%1800))
+
+# --- Simulate Windows EventCodes ---
+| eval EventCode=case(user="jdoe" AND n>=180 AND n<=205,4625,
+                      user="jdoe" AND n=206,4624,
+                      user="jdoe" AND n>=207 AND n<=210,4672,
+                      user="bob" AND n%15=0,4625,
+                      true(),4624)
+
+# --- Simulate host + source IP variation ---
+| eval host=case(user="jdoe" AND n>=180,"HR-LAPTOP-9",
+                 user="jdoe","ENG-LAPTOP-2",
+                 user="alice","FIN-PC-1",
+                 true(),"OPS-PC-3")
+| eval src_ip=case(user="jdoe" AND n>=180,"10.10.50.77", true(),"10.10.10.12")
+
+# --- Convert raw events to numeric signals ---
+| eval is_fail=if(EventCode=4625,1,0)
+| eval is_success=if(EventCode=4624,1,0)
+| eval is_priv=if(EventCode=4672,1,0)
+| eval hour=tonumber(strftime(_time,"%H"))
+| eval after_hours=if(hour>=22 OR hour<=5,1,0)
+
+# --- Summarize per user in 30-minute windows ---
+| bin _time span=30m
+| stats sum(is_fail) as fails
+        sum(is_success) as successes
+        sum(is_priv) as priv_events
+        max(after_hours) as after_hours
+        dc(host) as unique_hosts
+        values(host) as hosts
+        values(src_ip) as src_ips
+  by user _time
+
+# --- Detect escalation pattern + compute risk score ---
+| eval fail_success=if(fails>=10 AND successes>=1,1,0)
+| eval new_host=if(unique_hosts>=2,1,0)
+| eval priv_flag=if(priv_events>0,1,0)
+
+| eval risk = (fail_success*40) + (after_hours*20) + (new_host*25) + (priv_flag*30)
+
+# --- Keep only candidates ---
+| where risk>=50
+
+# --- Human-readable indicator list + recommended action ---
+| eval indicators=mvappend(
+    if(fail_success=1,"Fail→Success",""),
+    if(after_hours=1,"After-hours",""),
+    if(new_host=1,"New host",""),
+    if(priv_flag=1,"Privileged activity","")
+  )
+| eval indicators=mvfilter(indicators!="")
+
+| eval recommended_action=case(risk>=70,"Escalate to Fusion Center case",
+                               risk>=50,"Limited inquiry (triage)",
+                               true(),"Monitor")
+
+# --- Final output ---
+| table _time user risk fails successes after_hours priv_events hosts src_ips indicators recommended_action
+| sort -risk
