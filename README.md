@@ -9,14 +9,14 @@ Identify anomalous user activity and risk escalation indicators and classify for
 - Privileged logon activity (4672)
 - Simulated/sanitized data
 
-## Detection logic (plain English)
+## Detection logic
 Score insider risk using multiple signals within the same time window. Escalation occurs when indicators chain together:
 - Failures → success
 - After-hours activity
 - New host/IP usage
 - Privileged activity shortly after suspicious authentication
 
-## Risk scoring (example)
+## Risk scoring
 - Fail→Success: +40  
 - After-hours: +20  
 - New host/IP: +25  
@@ -32,7 +32,7 @@ Score insider risk using multiple signals within the same time window. Escalatio
 ## Evidence
 See `screenshots/` for the risk table output and the per-user timeline pivot.
 
-## Next steps (in a real environment)
+## Next steps
 - Validate business context (on-call/travel/role change)
 - Confirm asset sensitivity and scope
 - Check for follow-on actions (file access, uploads, suspicious tooling)
